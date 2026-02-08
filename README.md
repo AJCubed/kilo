@@ -5,7 +5,10 @@ This is following the tutorial at ![https://viewsourcecode.org/snaptoken/kilo/03
 TODO ITEMS:
 1. make the cursor disappear during search
 2. implement option-left and option-right
-3. fix enter behavior to keep current indent
+~~3. fix enter behavior to keep current indent~~
 4. implement line indexing
+    [x] print line columns
+    [] fix the cursor indexing
+    [] make sure the numbers are not affected by multi-comment syntax coloring
 5. allow deleting option/cmnd amounts
-6. implement highlighting
+6. implement highlighting/word selection

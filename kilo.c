@@ -68,7 +68,7 @@ enum editorHighlight {
 };
 
 /*** data ***/
-typedef  struct erow {
+typedef struct erow {
 	int idx;
 	int size;
 	char *chars;
@@ -88,6 +88,7 @@ struct editorConfig {
 	int rowoff;
 	int coloff;
 	int numrows;
+	int rowdigits; // how many digits in our numrows? used for rendering the sidebar
 	erow *row;
 	struct termios orig_term_attrs;	
 	int dirty;
@@ -111,6 +112,11 @@ struct editorSyntax {
 	char* multiline_comment_end;
 	int flags; //bit field for what to highlight
 };
+
+/*** utils ***/
+int getDigits(int n) {
+	return snprintf(0,0,"%+d",n)-1;
+}
 
 /*** filetypes ***/
 char* C_HL_extensions[] = {".c",".cpp",".h", NULL};
@@ -416,11 +422,15 @@ void editorUpdateRowRender(erow *row) {
 	for(int i=0;i<row->size;++i) {
 		if(row->chars[i]=='\t') ++tabCount;
 	}
+	int prefixlen = E.rowdigits+3;
+
 	free(row->render);
-	row->render = malloc(row->size + tabCount*(TAB_SIZE-1) + 1);
+	row->render = malloc(prefixlen + row->size + tabCount*(TAB_SIZE-1) + 1);
 	
+	snprintf(row->render,prefixlen, "%*d| ", E.rowdigits, row->idx);
+
 	int i;
-	int idx=0;
+	int idx=prefixlen-1;
 	for(i=0;i<row->size;++i) {
 		if(row->chars[i]=='\t') {
 			row->render[idx++] = ' ';
@@ -466,7 +476,15 @@ void editorInsertRow(int at, char *s, size_t len, int tabCount) {
 	E.row[at].hl = NULL;
 	editorUpdateRowRender(&E.row[at]);
 
+	// TODO: here, check if the number of digits in our rowcount exceeds the allocated space.
+	E.dirty++;
 	E.numrows++;
+	if(E.rowdigits!=getDigits(E.numrows)) {
+		for(int i=0;i<E.numrows;i++) {
+			editorUpdateRowRender(&E.row[i]);
+		}
+	}
+	E.rowdigits = getDigits(E.numrows);
 }
 
 // TODO: save indent.
@@ -559,6 +577,11 @@ void editorDelRow(int at) {
 	for(int j=at;j<E.numrows-1;j++) E.row[j].idx--; // update indices
 	
 	E.numrows--;
+	if(E.rowdigits!=getDigits(E.numrows)) {
+		for(int i=0;i<E.numrows;i++) {
+			editorUpdateRowRender(&E.row[i]);
+		}
+	}
 	E.dirty++;
 }
 
@@ -754,8 +777,8 @@ void editorDrawRows(struct abuf *ab) {
 
 	for(y=0;y<E.screenrows;y++) {
 		int filerow = y + E.rowoff;
+		// empty file
 		if(filerow >= E.numrows){
-			// not enough content
 			if (E.numrows ==0 && y == 4 * E.screenrows / 5) {
 				char welcome[80];
 				int welcomelen = snprintf(welcome, sizeof(welcome), "Kilo editor -- version %s", KILO_VERSION);
@@ -773,7 +796,9 @@ void editorDrawRows(struct abuf *ab) {
 			} else {
 				abAppend(ab, "~", 1);
 			}
-		} else {
+		} 
+		// regular file
+		else {
 			int len = E.row[filerow].rsize - E.coloff;
 			if(len>E.screencols) len = E.screencols;
 			if(len<0) len = 0;
@@ -1042,6 +1067,7 @@ void initEditor(void) { // init everything in E
 	E.rowoff = 0;
 	E.coloff = 0;
 	E.numrows = 0;
+	E.rowdigits = 0;
 	E.row = NULL;
 	E.dirty = 0;
 	E.filename = NULL;
